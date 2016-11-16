@@ -44,13 +44,14 @@ def rollout(behavior_policy, env, max_t, render_env=False, reset_env=True,
     an existing environment'''
     if reset_env:
         obs = env.reset()
+        prev_obs = np.zeros((210, 160, 3))
     else:
         obs = last_obs
     observations, actions, rewards = [], [], []
     done = False
     t = 0
     while not done and t < max_t:
-        action_probs = behavior_policy(obs)
+        action_probs = behavior_policy(np.concatenate((prev_obs, obs), axis=-1))
         action = np.random.choice(env.action_space.n, p=action_probs)
         observations.append(obs)
         actions.append(action)
@@ -58,6 +59,7 @@ def rollout(behavior_policy, env, max_t, render_env=False, reset_env=True,
         rewards.append(reward)
         if render_env:
             env.render()
+        prev_obs = obs
         t += 1
     return observations, actions, rewards, done
 
@@ -238,7 +240,11 @@ def train(env, args, build_model):
                 episode_rewards = []
                 for observations, actions, rewards in episodes:
                     len_episode = len(observations)
-                    obs += observations
+                    tt = np.concatenate([np.asarray([np.zeros((210, 160, 3))] + observations[:-1]), np.asarray(observations)], axis=-1)
+                    if len(obs) == 0:
+                        obs = tt
+                    else:
+                        obs = np.concatenate((obs, tt), axis=0)
                     action_inds += actions
                     # reward with lambda decay over ticks
                     episode_rewards += [np.sum(np.prod([
@@ -247,7 +253,7 @@ def train(env, args, build_model):
                          for t in xrange(len_episode)]],
                         axis=0))
                     ] * len_episode
-
+                    
                 # estimate policy gradient by batches
                 # accumulate gradients over batches
                 acc_grads = dict([(grad, np.zeros(grad.get_shape()))

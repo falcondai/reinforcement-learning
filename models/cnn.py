@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 def build_model(conv_depth, fc_depth, dim_observation, dim_action, batch=None):
-    obs_ph = tf.placeholder('float', [batch, 210, 160, 3], name='observation')
+    obs_ph = tf.placeholder('float', [batch, 210, 160, 6], name='observation')
     keep_prob_ph = tf.placeholder('float', name='keep_prob')
     tf.add_to_collection('inputs', obs_ph)
     tf.add_to_collection('inputs', keep_prob_ph)
