@@ -253,7 +253,7 @@ def train(env, args, build_model):
                          for t in xrange(len_episode)]],
                         axis=0))
                     ] * len_episode
-                    
+
                 # estimate policy gradient by batches
                 # accumulate gradients over batches
                 acc_grads = dict([(grad, np.zeros(grad.get_shape()))
@@ -356,7 +356,4 @@ if __name__ == '__main__':
     model = importlib.import_module('models.%s' % args.model)
 
     # train
-    if args.model == 'cnn':
-        train(env, vars(args), partial(model.build_model, 3, 0))
-    else:
-        train(env, vars(args), model.build_model)
+    train(env, vars(args), partial(model.build_model, [210, 160, 6]))
