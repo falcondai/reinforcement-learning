@@ -105,7 +105,6 @@ def train(env, args, build_model):
         # model
         print '* building model %s' % args['model']
         obs_ph, keep_prob_ph, logits, probs, state_value = build_model(
-            env.observation_space.shape[0],
             env.action_space.n)
         actions_taken_ph = tf.placeholder('int32')
         avg_len_episode_ph = tf.placeholder('float')
@@ -209,7 +208,7 @@ def train(env, args, build_model):
                     observations, actions, rewards, done = rollout(
                         policy,
                         env,
-                        env_spec.timestep_limit,
+                        min(args['timestep_limit'], env_spec.timestep_limit),
                         args['render_env'],
                         reset_env=True,
                     )
@@ -226,11 +225,7 @@ def train(env, args, build_model):
                 episode_rewards = []
                 for observations, actions, rewards in episodes:
                     len_episode = len(observations)
-                    tt = np.concatenate([np.asarray([np.zeros((210, 160, 3))] + observations[:-1]), np.asarray(observations)], axis=-1)
-                    if len(obs) == 0:
-                        obs = tt
-                    else:
-                        obs = np.concatenate((obs, tt), axis=0)
+                    obs.append(np.concatenate([np.asarray([np.zeros((210, 160, 3))] + observations[:-1]), np.asarray(observations)], axis=-1))
                     action_inds += actions
                     # reward with lambda decay over ticks
                     episode_rewards += [np.sum(np.prod([
@@ -239,6 +234,7 @@ def train(env, args, build_model):
                          for t in xrange(len_episode)]],
                         axis=0))
                     ] * len_episode
+                obs = np.concatenate(obs, axis=0)
 
                 # estimate policy gradient by batches
                 # accumulate gradients over batches
@@ -290,6 +286,7 @@ def build_argparser():
 
     # gym options
     parse.add_argument('--env', default='CartPole-v0')
+    parse.add_argument('--timestep_limit', type=int, default=3000)
     parse.add_argument('--model', required=True)
     parse.add_argument('--monitor', action='store_true')
     parse.add_argument('--monitor_dir',

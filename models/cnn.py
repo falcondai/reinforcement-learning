@@ -8,7 +8,7 @@ def build_model(shape_observation, dim_action, batch=None):
     tf.add_to_collection('inputs', keep_prob_ph)
 
     with tf.variable_scope('model'):
-        net = obs_ph
+        net = obs_ph / 255.
         net = tf.contrib.layers.convolution2d(
             inputs=net,
             num_outputs=8,
