@@ -129,36 +129,48 @@ def train_q(env_spec, env_step, env_reset, env_render, args, build_q_model):
 
         # train ops
         grad_vars = optimizer.compute_gradients(objective)
+        if args['use_clip_grad']:
+            # clip gradients
+            grads = [g for g, v in grad_vars]
+            gn = tf.global_norm(grads)
+            clipped_grads = tf.clip_by_global_norm(grads, args['clip_norm'], gn)[0]
+            clipped_gn = tf.global_norm(clipped_grads)
+            clipped_grad_vars = [(clipped_grad, grad_vars[i][1]) for i, clipped_grad
+                                 in enumerate(clipped_grads)]
+            # log gradient norms
+            tf.scalar_summary('global_norm', gn)
+            tf.scalar_summary('clipped_global_norm', clipped_gn)
+        else:
+            clipped_grad_vars = grad_vars
+
         update_q_op = optimizer.apply_gradients(
-            grad_vars,
+            clipped_grad_vars,
             global_step=global_step)
 
         # summary
-        if not args['no_summary']:
-            tf.scalar_summary('learning_rate', learning_rate)
-            tf.scalar_summary('average_episode_reward',
-                              avg_episode_reward_ph)
-            tf.scalar_summary('max_episode_reward', max_episode_reward_ph)
-            tf.scalar_summary('min_episode_reward', min_episode_reward_ph)
-            tf.scalar_summary('average_tick_reward', avg_tick_reward_ph)
-            tf.scalar_summary('average_episode_length', avg_len_episode_ph)
-            tf.scalar_summary('average_objective', avg_objective_ph)
-            tf.scalar_summary('epsilon', epsilon_ph)
+        tf.scalar_summary('learning_rate', learning_rate)
+        tf.scalar_summary('average_episode_reward',
+                          avg_episode_reward_ph)
+        tf.scalar_summary('max_episode_reward', max_episode_reward_ph)
+        tf.scalar_summary('min_episode_reward', min_episode_reward_ph)
+        tf.scalar_summary('average_tick_reward', avg_tick_reward_ph)
+        tf.scalar_summary('average_episode_length', avg_len_episode_ph)
+        tf.scalar_summary('average_objective', avg_objective_ph)
+        tf.scalar_summary('epsilon', epsilon_ph)
 
-            print '* extra summary'
-            for g, v in grad_vars:
-                tf.histogram_summary('gradients/%s' % v.name, g)
-                print 'gradients/%s' % v.name
+        print '* extra summary'
+        for g, v in clipped_grad_vars:
+            tf.histogram_summary('gradients/%s' % v.name, g)
+            print 'gradients/%s' % v.name
 
-            summary_op = tf.merge_all_summaries()
+        summary_op = tf.merge_all_summaries()
 
         saver = tf.train.Saver(max_to_keep=2,
                                keep_checkpoint_every_n_hours=1)
         with tf.Session() as sess:
-            if not args['no_summary']:
-                writer = tf.train.SummaryWriter(summary_dir, sess.graph,
-                                                flush_secs=30)
-                print '* writing summary to', summary_dir
+            writer = tf.train.SummaryWriter(summary_dir, sess.graph,
+                                            flush_secs=30)
+            print '* writing summary to', summary_dir
             restore_vars(saver, sess, args['checkpoint_dir'], args['restart'])
 
             print '* regularized parameters:'
@@ -263,8 +275,7 @@ def train_q(env_spec, env_step, env_reset, env_render, args, build_q_model):
                     summary_val, _ = sess.run([summary_op, update_q_op],
                                               feed_dict=update_dict)
 
-                    if not args['no_summary']:
-                        writer.add_summary(summary_val, global_step.eval())
+                    writer.add_summary(summary_val, global_step.eval())
 
                 if i % args['n_save_interval'] == 0:
                     saver.save(sess, args['checkpoint_dir'] + '/model',
@@ -299,7 +310,6 @@ def build_argparser():
 
     parse.add_argument('--restart', action='store_true')
     parse.add_argument('--checkpoint_dir', required=True)
-    parse.add_argument('--no_summary', action='store_true')
     parse.add_argument('--summary_prefix', default='')
     parse.add_argument('--render', action='store_true')
 
@@ -308,7 +318,6 @@ def build_argparser():
     parse.add_argument('--n_batch_ticks', type=int, default=128)
     parse.add_argument('--n_save_interval', type=int, default=1)
     parse.add_argument('--n_train_steps', type=int, default=10**5)
-    parse.add_argument('--n_update_target_interval', type=int, default=4)
     parse.add_argument('--n_value_updates', type=int, default=1)
 
     # optimizer options
@@ -328,6 +337,8 @@ def build_argparser():
     parse.add_argument('--lr_decay_rate', type=float, default=0.8)
     parse.add_argument('--initial_epsilon', type=float, default=0.1)
     parse.add_argument('--epsilon_decay_rate', type=float, default=0.001)
+    parse.add_argument('--clip_norm', type=float, default=1e3)
+    parse.add_argument('--use_clip_norm', action='store_true')
 
     parse.add_argument('--np_seed', type=int, default=123)
     parse.add_argument('--tf_seed', type=int, default=1234)
